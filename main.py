@@ -1,4 +1,3 @@
-# import tkinter as tk
 import time 
 import ttkbootstrap as tkb
 from ttkbootstrap.dialogs import Messagebox
