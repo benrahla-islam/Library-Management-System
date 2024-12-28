@@ -2,13 +2,14 @@
 import time 
 import ttkbootstrap as tkb
 from ttkbootstrap.dialogs import Messagebox
-from dbConnection import getConnection , verify_and_create_tables
+from dbConnection import getConnection , verify_and_create_tables 
 import sqlite3 as db
 # Create the main window with a Ttkbootstrap theme
 root = tkb.Window(title='Library Management System')
 root.geometry("1100x600+30+30")
 
 verify_and_create_tables()
+
 
 def ErrorMessage (ErrorText):
     Messagebox.show_error(
@@ -20,7 +21,55 @@ def changeTheme(x):
     root.style.theme_use(x)
 
 def changeLib():
-    pass
+    """Creating top level to change the librarian."""
+    def update_librarian():
+        """Update librarian details in the database."""
+        name = name_entry.get().strip()
+        password = password_entry.get().strip()
+
+        if not name or not password:
+            ErrorMessage("Input Error All fields are required.")
+            return
+        labelLibrarianName.config(text=name)
+        Messagebox.ok('librarian in charge changed successfully')
+
+        '''try:
+            conn = getConnection()
+            cursor = conn.cursor()
+            # Update librarian details in the database
+            cursor.execute("""
+                UPDATE librarians 
+                SET name = %s, email = %s, password = %s 
+                WHERE id = 1
+            """, (name, email, password))
+            conn.commit()
+            tkb.showinfo("Success", "Librarian details updated successfully.")
+        except db.Error as e:
+            tkb.showerror("Database Error", f"Error updating librarian: {e}")
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+                top.destroy()'''
+
+    # Creating Toplevel window
+    top = tkb.Toplevel(title='Change Librarian')
+    top.geometry('400x300')
+    top.resizable(False, False)
+
+    # Labels and Entries
+    tkb.Label(top, text="Name:").place(x=20, y=50)
+    name_entry = tkb.Entry(top)
+    name_entry.place(x=120, y=50, width=200)
+
+    tkb.Label(top, text="Password:").place(x=20, y=100)
+    password_entry = tkb.Entry(top, show="*")  # Masked input for password
+    password_entry.place(x=120, y=100, width=200)
+
+    # Action Buttons
+    tkb.Button(top, text="Save", style="outline-primary", command=update_librarian).place(x=50, y=220)
+    tkb.Button(top, text="Cancel", style="outline-secondary", command=top.destroy).place(x=200, y=220)
+
 
 
 # System Actions Section
@@ -85,7 +134,9 @@ def confirm_loan(card_id_entry, book_id_entry):
     """Confirm the loan and update the database."""
     reader_id = card_id_entry.get().strip()
     book_id = book_id_entry.get().strip()
-
+    if not (reader_id or book_id) : 
+        ErrorMessage('Error updating reader:\none or more fields are empty')
+        return
     try:
         conn = getConnection()
         cursor = conn.cursor()
@@ -111,12 +162,13 @@ def confirm_loan(card_id_entry, book_id_entry):
         """, (reader[0], book_id))
 
         # Update book's available copies
-        cursor.execute("UPDATE books SET status = 'unavailable' WHERE book_id = ?", (book_id,))
+        cursor.execute("UPDATE books SET status = 'Borrowed' WHERE book_id = ?", (book_id,))
         conn.commit()
 
         Messagebox.show_info(f"Loan successfully added for the book '{book[0]}'.")
+        populate_books_treeview
     
-    except Exception as e:
+    except db.Error as e:
         ErrorMessage(f"Error confirming loan: {e}")
     
     finally:
@@ -216,16 +268,65 @@ def loan():
 
 def book_return():
     """Toplevel window to handle book returns."""
+
+    def check_borrowing():
+        """Checks the borrowing details and fills the labels with the reader's and book's names."""
+        borrowing_id = borrowing_id_entry.get().strip()
+        if not borrowing_id:
+            print("Please enter a Borrowing ID.")  # Replace with a proper error message for the user
+            return
+
+        try:
+            conn = getConnection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT r.name AS reader_name, b.title AS book_title
+                FROM borrowings br
+                JOIN readers r ON br.reader_id = r.reader_id
+                JOIN books b ON br.book_id = b.book_id
+                WHERE br.borrowing_id = ?
+                """,
+                (borrowing_id)
+            )
+            result = cursor.fetchone()
+
+            if result:
+                reader_name, book_title = result
+                # Update the labels with fetched data
+                reader_id_label.config(text=reader_name)
+                book_id_label.config(text=book_title)
+            else:
+                ErrorMessage(f"No borrowing found with ID {borrowing_id}.")  # Replace with a user-friendly error message
+                reader_id_label.config(text="Reader: Not Found")
+                book_id_label.config(text="Book: Not Found")
+        except db.Error as e:
+            ErrorMessage(f"Error checking borrowing details: {e}")  # Replace with a user-friendly error message
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+    
     top = tkb.Toplevel(title="Return Book")
     top.geometry("400x300")
     top.resizable(False, False)
 
     # Labels and Entries
-    tkb.Label(top, text="Borrowing ID:").place(x=20, y=20)
+    tkb.Label(top, text="Borrowing ID:").place(x=20, y=25)
     borrowing_id_entry = tkb.Entry(top)
-    borrowing_id_entry.place(x=150, y=20, width=200)
+    borrowing_id_entry.place(x=150, y=20, width=150)
+
+    tkb.Label(top, text="Reader ID:").place(x=20, y=70)
+    reader_id_label = tkb.Label(top, text="")
+    reader_id_label.place(x=150, y=70)
+
+    tkb.Label(top, text="Book ID:").place(x=20, y=115)
+    book_id_label = tkb.Label(top, text="")
+    book_id_label.place(x=150,y=115)
+
 
     # Action Buttons
+    tkb.Button(top, text='check' , style='secondary-outline' , command= check_borrowing ).place(x=270,y=20)
     tkb.Button(top, text="Return", style="outline-primary", command=lambda: return_book_entry(borrowing_id_entry)).place(x=50, y=200)
     tkb.Button(top, text="Cancel", style="outline-secondary", command=top.destroy).place(x=200, y=200)
 
@@ -236,10 +337,10 @@ def return_book_entry(borrowing_id_entry):
         conn = getConnection()
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE borrowings SET return_date=NOW(), status='Returned' WHERE borrowing_id=%s
-        """, (borrowing_id,))
+            UPDATE borrowings SET return_date=NOW(), status='Returned' WHERE borrowing_id=?
+        """, (borrowing_id))
         conn.commit()
-        print("Book return processed successfully.")
+        Messagebox.ok("Book return processed successfully.")
     except db.Error as e:
         ErrorMessage(f"Error returning book: {e}")
     finally:
@@ -276,21 +377,25 @@ def search_readers():
             cursor.close()
             conn.close()
 
-def edit_reader():
+def edit_reader(reader_id_entry , name_entry , email_entry , phone_entry , max_books_entry):
     """Function to update the reader's details in the database."""
-    reader_id = root.reader_id_entry.get()
-    name = root.name_entry.get()
-    email = root.email_entry.get()
-    phone = root.phone_entry.get()
-    max_books = root.max_books_entry.get()
+    reader_id = reader_id_entry.get()
+    name = name_entry.get()
+    email = email_entry.get()
+    phone = phone_entry.get()
+    max_books = max_books_entry.get()
+    if not name or email or phone or max_books : 
+        ErrorMessage('Error updating reader:\none or more fields are empty')
+        return
     try:
         conn = getConnection()
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE readers SET name=%s, email=%s, phone=%s, max_books_to_borrow=%s WHERE reader_id=%s
+            UPDATE readers SET name=?, email=?, phone=?, max_books_to_borrow=? WHERE reader_id = ?
         """, (name, email, phone, max_books, reader_id))
         conn.commit()
-        print("Reader updated successfully.")
+        Messagebox.ok("Reader updated successfully.")
+        populate_readers_treeview()
     except db.Error as e:
         ErrorMessage(f"Error updating reader: {e}")
     finally:
@@ -300,6 +405,49 @@ def edit_reader():
 
 def edit_reader_window():
     """Toplevel window to edit an existing reader."""
+    def fill():
+        """Fill the entries with the existing data of the reader."""
+        reader_id = reader_id_entry.get().strip()
+        if not reader_id:
+            print("Please enter a Reader ID.")  # Or show an error message to the user
+            return
+        
+        try:
+            conn = getConnection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT name, email, phone, max_books_to_borrow 
+                FROM readers 
+                WHERE reader_id = ?
+                """, 
+                (reader_id,)
+            )
+            result = cursor.fetchone()
+            
+            if result:
+                name, email, phone, max_books = result
+                # Fill the entries with fetched data
+                name_entry.delete(0, tkb.END)
+                name_entry.insert(0, name)
+
+                email_entry.delete(0, tkb.END)
+                email_entry.insert(0, email)
+
+                phone_entry.delete(0, tkb.END)
+                phone_entry.insert(0, phone)
+
+                max_books_entry.delete(0, tkb.END)
+                max_books_entry.insert(0, max_books)
+            else:
+                ErrorMessage(f"No reader found with ID {reader_id}.")  # Show error to user
+        except db.Error as e:
+            print(f"Error fetching reader data: {e}")  # Or show an error message to the user
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
     top = tkb.Toplevel(title="Edit Reader")
     top.geometry("400x400")
     top.resizable(False, False)
@@ -307,7 +455,9 @@ def edit_reader_window():
     # Labels and Entries
     tkb.Label(top, text="Reader ID:").place(x=20, y=20)
     reader_id_entry = tkb.Entry(top)
-    reader_id_entry.place(x=120, y=20, width=200)
+    reader_id_entry.place(x=120, y=20, width=139)
+
+    tkb.Button(top,text='check',style='secondary-outline',command=fill).place(x=260,y=20)
 
     tkb.Label(top, text="Name:").place(x=20, y=70)
     name_entry = tkb.Entry(top)
@@ -326,7 +476,7 @@ def edit_reader_window():
     max_books_entry.place(x=120, y=220, width=200)
 
     # Action Buttons
-    tkb.Button(top, text="Save", style="outline-primary", command=edit_reader).place(x=50, y=300)
+    tkb.Button(top, text="Save", style="outline-primary", command=lambda :edit_reader(reader_id_entry,name_entry,email_entry,phone_entry,max_books_entry)).place(x=50, y=300)
     tkb.Button(top, text="Cancel", style="outline-secondary", command=top.destroy).place(x=200, y=300)
 
 
@@ -356,24 +506,46 @@ def add_reader_window():
     max_books_entry.place(x=120, y=170, width=200)
 
     # Action Buttons
-    tkb.Button(top, text="Add", style="outline-primary", command=add_reader).place(x=50, y=300)
+    tkb.Button(top, text="Add", style="outline-primary", command=lambda :add_reader(name_entry,email_entry,phone_entry,max_books_entry)).place(x=50, y=300)
     tkb.Button(top, text="Cancel", style="outline-secondary", command=top.destroy).place(x=200, y=300)
 
-def add_reader():
+def add_reader(name_entry , email_entry , phone_entry , max_books_entry):
     """Function to insert the reader into the database."""
-    name = root.name_entry.get()
-    email = root.email_entry.get()
-    phone = root.phone_entry.get()
-    max_books = root.max_books_entry.get()
+    name = name_entry.get()
+    email = email_entry.get()
+    phone = phone_entry.get()
+    max_books = max_books_entry.get()
+    if not name or email or phone or max_books : 
+        ErrorMessage('Error adding reader:\none or more fields are empty')
+        return
     try:
         conn = getConnection()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO readers (name, email, phone, max_books_to_borrow) VALUES (%s, %s, %s, %s)", 
+        cursor.execute("INSERT INTO readers (name, email, phone, max_books_to_borrow) VALUES (?, ?, ?, ?)", 
                        (name, email, phone, max_books))
         conn.commit()
-        print("Reader added successfully.")
+        Messagebox.ok("Reader added successfully.")
+        populate_readers_treeview()
     except db.Error as e:
         ErrorMessage(f"Error adding reader: {e}")
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+def delete_reader(reader_id_entry):
+    """Function to delete a reader from the database."""
+    reader_id = reader_id_entry.get()
+
+    try:
+        conn = getConnection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM readers WHERE reader_id=?", (reader_id,))
+        conn.commit()
+        Messagebox.ok("Reader deleted successfully.")
+        populate_readers_treeview()
+    except db.Error as e:
+        ErrorMessage(f"Error deleting reader: {e}")
     finally:
         if conn:
             cursor.close()
@@ -393,24 +565,9 @@ def delete_reader_window():
     reader_id_entry.place(x=120, y=50, width=150)
 
     # Action Buttons
-    tkb.Button(top, text="Delete", style="outline-primary", command=delete_reader).place(x=50, y=120)
+    tkb.Button(top, text="Delete", style="outline-primary", command=lambda : delete_reader(reader_id_entry)).place(x=50, y=120)
     tkb.Button(top, text="Cancel", style="outline-secondary", command=top.destroy).place(x=150, y=120)
 
-def delete_reader():
-    """Function to delete a reader from the database."""
-    reader_id = root.reader_id_entry.get()
-    try:
-        conn = getConnection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM readers WHERE reader_id=%s", (reader_id,))
-        conn.commit()
-        print("Reader deleted successfully.")
-    except db.Error as e:
-        ErrorMessage(f"Error deleting reader: {e}")
-    finally:
-        if conn:
-            cursor.close()
-            conn.close()
 
 
 # Create the Menu Bar
@@ -472,7 +629,7 @@ librarianButton = tkb.Button(
     text="Change Librarian",
     bootstyle="outline-primary",
     padding=5,
-    command=changeLib()
+    command=changeLib
 )
 librarianButton.place(relx=0.2, rely=0.25)
 
@@ -631,7 +788,7 @@ tree.column("ID", width=70, anchor="center")
 tree.column("title", width=200, anchor="w")
 tree.column("Cote", width=70,)
 tree.column("status", width=100)
-tree.column("Borrow count", width=70)
+tree.column("Borrow count", width=70,anchor='center')
 
 
 def populate_books_treeview():
@@ -670,7 +827,11 @@ reader_searchbar.bind("<Return>", lambda event: search_readers())
 
 # Creating the treeview for the Readers tab
 reader_tree = tkb.Treeview(tab_readers, columns=("ID", "Name", "Email", "Phone", "Max Books"), show="headings", bootstyle="info")
-reader_tree.place(x=20, y=80, relwidth=0.95)
+reader_tree.place(x=20, y=80, relwidth=0.95 , relheight= 0.68)
+
+v_scroll = tkb.Scrollbar(tab_readers, orient="vertical", command=reader_tree.yview)
+v_scroll.place(relx=0.965, y=80, relheight=0.68)  # Adjust relx and y to align with the treeview
+reader_tree.configure(yscrollcommand=v_scroll.set)
 
 reader_tree.heading("ID", text="ID")
 reader_tree.heading("Name", text="Name")
@@ -710,18 +871,18 @@ populate_readers_treeview()
 
 
 # Adding necessary buttons for the Readers tab
-add_reader = tkb.Button(tab_readers, text='Add Reader', style='outline-primary', command=add_reader_window)
-add_reader.place(x=30, y=330)
+add_reader_button = tkb.Button(tab_readers, text='Add Reader', style='outline-primary', command=add_reader_window)
+add_reader_button.place(x=30, y=-45, rely=1)
 
-edit_reader = tkb.Button(tab_readers, text='Edit Reader', style='outline-primary', command=edit_reader_window)
-edit_reader.place(x=150, y=330)
+edit_reader_button = tkb.Button(tab_readers, text='Edit Reader', style='outline-primary', command=edit_reader_window)
+edit_reader_button.place(x= 150 , rely= 1 , y=-45)
 
-delete_reader = tkb.Button(
+delete_reader_button = tkb.Button(
     tab_readers,
     text='Delete Reader',
     style='outline-primary',
     command=delete_reader_window)
-delete_reader.place(x=285, y=330)
+delete_reader_button.place(x=285, y=-45 , rely=1)
 
 #adding necessary buttons
 add_loan = tkb.Button(tab_books,text='Add Loan',command=loan,style='outline-primary')
