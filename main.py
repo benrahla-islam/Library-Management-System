@@ -1,14 +1,21 @@
 import time 
 import ttkbootstrap as tkb
 from ttkbootstrap.dialogs import Messagebox
-from dbConnection import getConnection , verify_and_create_tables 
+from dbConnection import getConnection , verify_and_create_tables , insert_random_books , insert_random_readers
 import sqlite3 as db
 # Create the main window with a Ttkbootstrap theme
 root = tkb.Window(title='Library Management System')
 root.geometry("1100x600+30+30")
 
-verify_and_create_tables()
 
+def refresh():
+    verify_and_create_tables()
+    populate_books_treeview()
+    populate_readers_treeview()
+
+def fill_tables():
+    insert_random_books()
+    insert_random_readers(getConnection(),num_readers=20)
 
 def ErrorMessage (ErrorText):
     Messagebox.show_error(
@@ -32,24 +39,7 @@ def changeLib():
         labelLibrarianName.config(text=name)
         Messagebox.ok('librarian in charge changed successfully')
 
-        '''try:
-            conn = getConnection()
-            cursor = conn.cursor()
-            # Update librarian details in the database
-            cursor.execute("""
-                UPDATE librarians 
-                SET name = %s, email = %s, password = %s 
-                WHERE id = 1
-            """, (name, email, password))
-            conn.commit()
-            tkb.showinfo("Success", "Librarian details updated successfully.")
-        except db.Error as e:
-            tkb.showerror("Database Error", f"Error updating librarian: {e}")
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
-                top.destroy()'''
+        
 
     # Creating Toplevel window
     top = tkb.Toplevel(title='Change Librarian')
@@ -165,7 +155,7 @@ def confirm_loan(card_id_entry, book_id_entry):
         conn.commit()
 
         Messagebox.show_info(f"Loan successfully added for the book '{book[0]}'.")
-        populate_books_treeview
+        populate_books_treeview()
     
     except db.Error as e:
         ErrorMessage(f"Error confirming loan: {e}")
@@ -888,7 +878,10 @@ add_loan = tkb.Button(tab_books,text='Add Loan',command=loan,style='outline-prim
 add_loan.place(x=30,y=-50,rely=1.0)
 return_book = tkb.Button(tab_books,text='Return Book',command=book_return,style='outline-primary')
 return_book.place(rely= 1.0,x=150,y=-50)
-
+refresh_button = tkb.Button(frame_right2,text='refresh',command=refresh,style='primary-outline')
+refresh_button.place(x=20, rely=0.5,y=-20)
+fill_tables_button = tkb.Button(frame_right2,text='fill tables',command=fill_tables,style='primary-outline')
+fill_tables_button.place(x=150,rely=0.5,y=-20)
 
 
 root.mainloop()
