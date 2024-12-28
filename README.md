@@ -71,7 +71,7 @@ The **Library Management System** is a Python-based application designed to simp
 1. **Clone the Repository**:
 
    ```bash
-   git clone https://github.com/yourusername/library-management-system.git
+   git clone https://github.com/benrahla-islam/Library-Management-System.git
    cd library-management-system
    ```
 
